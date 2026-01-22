@@ -89,7 +89,7 @@
                                                     }
                                                     $options = is_array($options) ? $options : [];
                                                 @endphp
-                                                @if(!empty($options))
+                                                @if(empty($options))
                                                     <p class="text-red-500 text-sm">No options available for this question.</p>
                                                 @else    
                                                     @foreach($options as $key => $option)

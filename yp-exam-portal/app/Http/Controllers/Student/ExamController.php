@@ -96,57 +96,7 @@ class ExamController extends Controller
 
     // In app/Http/Controllers/Student/ExamController.php
 
-public function submitAnswer(Request $request, Exam $exam, Question $question)
-{
-    $user = auth()->user();
-    
-    $attempt = ExamAttempt::where('exam_id', $exam->id)
-        ->where('student_id', $user->id)
-        ->where('status', 'in_progress')
-        ->firstOrFail();
-
-    // Decode options if needed
-    $options = $question->options;
-    if (is_string($options)) {
-        $options = json_decode($options, true) ?? [];
-    }
-    
-    // Prepare validation rule
-    $validationRule = ['answer' => 'required|string'];
-    
-    if ($question->type === 'multiple_choice') {
-        // Only validate against options if they exist
-        if (!empty($options)) {
-            $validationRule['answer'] = 'required|string|in:' . implode(',', $options);
-        }
-    }
-
-    $request->validate($validationRule);
-
-    $marksObtained = 0;
-    $isCorrect = false;
-
-    if ($question->type === 'multiple_choice') {
-        $isCorrect = $request->answer === $question->correct_answer;
-        $marksObtained = $isCorrect ? $question->marks : 0;
-    }
-
-    Answer::updateOrCreate(
-        [
-            'exam_attempt_id' => $attempt->id,
-            'question_id' => $question->id,
-        ],
-        [
-            'answer' => $request->answer,
-            'marks_obtained' => $marksObtained,
-            'is_correct' => $isCorrect,
-        ]
-    );
-
-    return response()->json(['success' => true]);
-}
-
-    public function submitExam(Request $request, Exam $exam)
+    public function submitAnswer(Request $request, Exam $exam, Question $question)
     {
         $user = auth()->user();
         
@@ -155,19 +105,48 @@ public function submitAnswer(Request $request, Exam $exam, Question $question)
             ->where('status', 'in_progress')
             ->firstOrFail();
 
-        // Calculate total marks
-        $totalMarks = $attempt->answers()->sum('marks_obtained');
+        // Decode options if needed
+        $options = $question->options;
+        if (is_string($options)) {
+            $options = json_decode($options, true) ?? [];
+        }
+        
+        // Prepare validation rule
+        $validationRule = ['answer' => 'required|string'];
+        
+        if ($question->type === 'multiple_choice') {
+            // Only validate against options if they exist
+            if (!empty($options)) {
+                $validationRule['answer'] = 'required|string|in:' . implode(',', $options);
+            }
+        }
 
-        $attempt->update([
-            'end_time' => now(),
-            'total_marks_obtained' => $totalMarks,
-            'status' => 'completed',
-        ]);
+        $request->validate($validationRule);
 
-        return redirect()->route('student.exams.results', $attempt)
-            ->with('success', 'Exam submitted successfully!');
+        $marksObtained = 0;
+        $isCorrect = false;
+
+        if ($question->type === 'multiple_choice') {
+            // THIS IS THE KEY PART - Compare student's answer with correct answer
+            $isCorrect = $request->answer === $question->correct_answer;
+            $marksObtained = $isCorrect ? $question->marks : 0;
+        }
+        // Note: For open_text questions, marks are typically 0 unless manually graded
+
+        Answer::updateOrCreate(
+            [
+                'exam_attempt_id' => $attempt->id,
+                'question_id' => $question->id,
+            ],
+            [
+                'answer' => $request->answer,
+                'marks_obtained' => $marksObtained,
+                'is_correct' => $isCorrect,
+            ]
+        );
+
+        return response()->json(['success' => true]);
     }
-
    public function results(ExamAttempt $attempt)
     {
         // Replace authorize() with manual check
